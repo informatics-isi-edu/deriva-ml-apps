@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Vendored schemas fetched from GitHub (run scripts/fetch-schemas.sh)
+src/schemas/vendor/

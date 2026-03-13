@@ -1,0 +1,65 @@
+name: Update Deriva Schemas
+
+on:
+  # Run daily at 6:00 UTC to catch upstream schema changes
+  schedule:
+    - cron: "0 6 * * *"
+  # Also run on PRs that touch schema-related files
+  pull_request:
+    paths:
+      - "schema-workbench/src/schemas/**"
+      - "schema-workbench/scripts/fetch-schemas.sh"
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  update-schemas:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch latest schemas from deriva-py
+        run: bash schema-workbench/scripts/fetch-schemas.sh
+
+      - name: Check for schema changes
+        id: diff
+        run: |
+          git add schema-workbench/src/schemas/vendor/
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create PR with schema updates
+        if: steps.diff.outputs.changed == 'true' && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="auto/update-deriva-schemas"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "chore: update vendored Deriva annotation schemas
+
+          Auto-fetched from informatics-isi-edu/deriva-py master."
+          git push -f origin "$BRANCH"
+          # Create PR if one doesn't already exist
+          if ! gh pr list --head "$BRANCH" --state open --json number -q '.[0].number' | grep -q .; then
+            gh pr create \
+              --title "chore: update Deriva annotation schemas" \
+              --body "Automated update of vendored JSON Schemas from [deriva-py](https://github.com/informatics-isi-edu/deriva-py/tree/master/deriva/core/schemas)." \
+              --head "$BRANCH"
+          fi
+
+      - name: Verify build with updated schemas
+        if: steps.diff.outputs.changed == 'true' || github.event_name == 'pull_request'
+        working-directory: schema-workbench
+        run: |
+          npm ci
+          npx tsc -b
+          npx vite build

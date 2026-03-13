@@ -15,7 +15,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { Plus, Trash2, Save, Undo2, RotateCcw, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -24,11 +23,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -39,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { EnrichedTable, ColumnInfo, KeyInfo, ForeignKeyInfo, CatalogSchema } from "@/types";
+import type { EnrichedTable } from "@/types";
 import {
   putTableAnnotation,
   putColumnAnnotation,
@@ -60,26 +54,16 @@ import {
   getMissingTags,
   shortTagName,
   type ModelObjectType,
-  type AnnotationTagInfo,
 } from "@/annotation-registry";
 import {
   useAnnotationDraft,
   type AnnotationChange,
 } from "@/hooks/useAnnotationDraft";
+import { getSchemaForTag, classifySchema } from "@/schemas";
+import { SchemaFormEditor, FlagAnnotationEditor } from "@/components/erd/rjsf";
 
-// Short aliases
-const TAGS = {
-  DISPLAY: TAG.display,
-  VISIBLE_COLUMNS: TAG.visible_columns,
-  VISIBLE_FOREIGN_KEYS: TAG.visible_foreign_keys,
-  TABLE_DISPLAY: TAG.table_display,
-  COLUMN_DISPLAY: TAG.column_display,
-  ASSET: TAG.asset,
-  CITATION: TAG.citation,
-  SOURCE_DEFINITIONS: TAG.source_definitions,
-  FOREIGN_KEY: TAG.foreign_key,
-  KEY_DISPLAY: TAG.key_display,
-} as const;
+// Tag alias for custom editor override
+const TAG_DISPLAY = TAG.display;
 
 // Known context names
 const CONTEXT_LABELS: Record<string, string> = {
@@ -283,7 +267,7 @@ export default function AnnotationsPanel({ table, onDirtyChange }: AnnotationsPa
     }
   };
 
-  const { annotations, objectType, targetLabel } = resolveTarget();
+  const { annotations, objectType } = resolveTarget();
 
   // Build write/delete functions for the current target
   const makeWriteFn = (): WriteFn => {
@@ -915,41 +899,37 @@ function TagEditor({
     );
   }
 
-  // Route to specialized editor by tag
+  // Route to editor: custom override → schema-driven → JSON fallback
   let editor: React.ReactNode;
-  switch (tag) {
-    case TAGS.DISPLAY:
-      editor = <DisplayEditor data={data} onUpdate={onUpdateJson} />;
-      break;
-    case TAGS.VISIBLE_COLUMNS:
-      editor = <VisibleColumnsEditor data={data} />;
-      break;
-    case TAGS.VISIBLE_FOREIGN_KEYS:
-      editor = <VisibleForeignKeysEditor data={data} />;
-      break;
-    case TAGS.TABLE_DISPLAY:
-      editor = <TableDisplayEditor data={data} />;
-      break;
-    case TAGS.COLUMN_DISPLAY:
-      editor = <ColumnDisplayEditor data={data} />;
-      break;
-    case TAGS.ASSET:
-      editor = <AssetEditor data={data} />;
-      break;
-    case TAGS.CITATION:
-      editor = <CitationEditor data={data} />;
-      break;
-    case TAGS.SOURCE_DEFINITIONS:
-      editor = <SourceDefinitionsEditor data={data} />;
-      break;
-    case TAGS.FOREIGN_KEY:
-      editor = <ForeignKeyEditor data={data} />;
-      break;
-    case TAGS.KEY_DISPLAY:
-      editor = <KeyDisplayEditor data={data} />;
-      break;
-    default:
-      editor = <ReadOnlyJsonViewer data={data} />;
+
+  // Custom override: DisplayEditor has hand-crafted UX that's better than auto-generated
+  if (tag === TAG_DISPLAY) {
+    editor = <DisplayEditor data={data} onUpdate={onUpdateJson} />;
+  } else {
+    // Schema-driven routing
+    const schema = getSchemaForTag(tag);
+    if (schema) {
+      const category = classifySchema(tag, schema);
+      switch (category) {
+        case "placeholder":
+          editor = <FlagAnnotationEditor info={info || undefined} />;
+          break;
+        case "open":
+          // Open schemas (like chaise_config) fall back to JSON editor
+          editor = onUpdateJson
+            ? <DraftJsonEditor data={data} onUpdate={onUpdateJson} />
+            : <ReadOnlyJsonViewer data={data} />;
+          break;
+        case "rich":
+          editor = <SchemaFormEditor schema={schema} formData={data} onChange={onUpdateJson} />;
+          break;
+      }
+    } else {
+      // No schema available — JSON fallback
+      editor = onUpdateJson
+        ? <DraftJsonEditor data={data} onUpdate={onUpdateJson} />
+        : <ReadOnlyJsonViewer data={data} />;
+    }
   }
 
   return (
@@ -1134,8 +1114,8 @@ function DisplayEditor({ data, onUpdate }: { data: any; onUpdate?: (value: any) 
           editable={editable}
           defaultValue={false}
           onUpdate={update}
-          renderContext={(ctx, value, onChange) => (
-            <CommentContextEditor ctx={ctx} value={value} onChange={onChange} editable={editable} />
+          renderContext={(_ctx, value, onChange) => (
+            <CommentContextEditor ctx={_ctx} value={value} onChange={onChange} editable={editable} />
           )}
         />
       </EditFormGroup>
@@ -1148,7 +1128,7 @@ function DisplayEditor({ data, onUpdate }: { data: any; onUpdate?: (value: any) 
           editable={editable}
           defaultValue={{}}
           onUpdate={update}
-          renderContext={(ctx, value, onChange) => (
+          renderContext={(_ctx, value, onChange) => (
             <CommentDisplayContextEditor value={value} onChange={onChange} editable={editable} />
           )}
         />
@@ -1162,7 +1142,7 @@ function DisplayEditor({ data, onUpdate }: { data: any; onUpdate?: (value: any) 
           editable={editable}
           defaultValue={true}
           onUpdate={update}
-          renderContext={(ctx, value, onChange) => (
+          renderContext={(_ctx, value, onChange) => (
             <ShowNullContextEditor value={value} onChange={onChange} editable={editable} />
           )}
         />
@@ -1176,7 +1156,7 @@ function DisplayEditor({ data, onUpdate }: { data: any; onUpdate?: (value: any) 
           editable={editable}
           defaultValue={true}
           onUpdate={update}
-          renderContext={(ctx, value, onChange) => (
+          renderContext={(_ctx, value, onChange) => (
             <ShowFkLinkContextEditor value={value} onChange={onChange} editable={editable} />
           )}
         />
@@ -1617,590 +1597,24 @@ function ShowFkLinkContextEditor({
   );
 }
 
-// ── Visible Columns editor ──────────────────────────────────────
-
-function VisibleColumnsEditor({ data }: { data: any }) {
-  const contexts = Object.keys(data);
-  if (contexts.length === 0) return <EmptyField />;
-
-  return (
-    <ContextTabs contexts={contexts}>
-      {(ctx) => {
-        const value = data[ctx];
-        if (typeof value === "string") return <ContextReference target={value} />;
-        const entries = ctx === "filter" && value?.and
-          ? value.and
-          : Array.isArray(value) ? value : [];
-        return <SourceEntryList entries={entries} isFilter={ctx === "filter"} />;
-      }}
-    </ContextTabs>
-  );
-}
-
-// ── Visible Foreign Keys editor ─────────────────────────────────
-
-function VisibleForeignKeysEditor({ data }: { data: any }) {
-  const contexts = Object.keys(data);
-  if (contexts.length === 0) return <EmptyField />;
-
-  return (
-    <ContextTabs contexts={contexts}>
-      {(ctx) => {
-        const value = data[ctx];
-        if (typeof value === "string") return <ContextReference target={value} />;
-        const entries = Array.isArray(value) ? value : [];
-        return <SourceEntryList entries={entries} />;
-      }}
-    </ContextTabs>
-  );
-}
-
-// ── Table Display editor ────────────────────────────────────────
-
-function TableDisplayEditor({ data }: { data: any }) {
-  const contexts = Object.keys(data);
-  if (contexts.length === 0) return <EmptyField />;
-
-  return (
-    <ContextTabs contexts={contexts}>
-      {(ctx) => {
-        const value = data[ctx];
-        if (typeof value === "string") return <ContextReference target={value} />;
-        if (!value || typeof value !== "object") return null;
-        return <TableDisplayContextEditor data={value} />;
-      }}
-    </ContextTabs>
-  );
-}
-
-function TableDisplayContextEditor({ data }: { data: any }) {
-  return (
-    <div className="space-y-3">
-      {data.row_order && Array.isArray(data.row_order) && (
-        <FormGroup title="Row Order">
-          <SortKeyList keys={data.row_order} />
-        </FormGroup>
-      )}
-      {data.row_markdown_pattern && (
-        <FormGroup title="Row Markdown Pattern">
-          <CodeBlock value={data.row_markdown_pattern} />
-        </FormGroup>
-      )}
-      {data.page_markdown_pattern && (
-        <FormGroup title="Page Markdown Pattern">
-          <CodeBlock value={data.page_markdown_pattern} />
-        </FormGroup>
-      )}
-      {data.separator_pattern && <FormRow label="Separator" value={data.separator_pattern} mono />}
-      {data.prefix_pattern && <FormRow label="Prefix" value={data.prefix_pattern} mono />}
-      {data.suffix_pattern && <FormRow label="Suffix" value={data.suffix_pattern} mono />}
-      {data.page_size !== undefined && <FormRow label="Page Size" value={String(data.page_size)} />}
-      <div className="flex gap-3 flex-wrap">
-        {data.collapse_toc_panel !== undefined && <CheckboxDisplay label="Collapse TOC" checked={!!data.collapse_toc_panel} />}
-        {data.hide_column_headers !== undefined && <CheckboxDisplay label="Hide Column Headers" checked={!!data.hide_column_headers} />}
-      </div>
-    </div>
-  );
-}
-
-// ── Column Display editor ───────────────────────────────────────
-
-function ColumnDisplayEditor({ data }: { data: any }) {
-  const contexts = Object.keys(data);
-  if (contexts.length === 0) return <EmptyField />;
-
-  return (
-    <ContextTabs contexts={contexts}>
-      {(ctx) => {
-        const value = data[ctx];
-        if (typeof value === "string") return <ContextReference target={value} />;
-        if (!value || typeof value !== "object") return null;
-        return <ColumnDisplayContextEditor data={value} />;
-      }}
-    </ContextTabs>
-  );
-}
-
-function ColumnDisplayContextEditor({ data }: { data: any }) {
-  return (
-    <div className="space-y-3">
-      {data.markdown_pattern && (
-        <FormGroup title="Markdown Pattern">
-          <CodeBlock value={data.markdown_pattern} />
-        </FormGroup>
-      )}
-      {data.template_engine && <FormRow label="Template Engine" value={data.template_engine} />}
-      {data.pre_format && typeof data.pre_format === "object" && (
-        <FormGroup title="Pre-Format">
-          {data.pre_format.format && <FormRow label="Format" value={data.pre_format.format} mono />}
-          {data.pre_format.bool_true_value && <FormRow label="True Value" value={data.pre_format.bool_true_value} />}
-          {data.pre_format.bool_false_value && <FormRow label="False Value" value={data.pre_format.bool_false_value} />}
-        </FormGroup>
-      )}
-      {data.column_order !== undefined && (
-        <FormGroup title="Column Order">
-          {data.column_order === false ? (
-            <span className="text-[11px] text-slate-400 italic">Sorting disabled</span>
-          ) : Array.isArray(data.column_order) ? (
-            <SortKeyList keys={data.column_order} />
-          ) : (
-            <span className="text-[11px] text-slate-600">{JSON.stringify(data.column_order)}</span>
-          )}
-        </FormGroup>
-      )}
-    </div>
-  );
-}
-
-// ── Asset editor ────────────────────────────────────────────────
-
-function AssetEditor({ data }: { data: any }) {
-  return (
-    <div className="space-y-3">
-      {data.url_pattern && (
-        <FormGroup title="URL Pattern">
-          <CodeBlock value={data.url_pattern} />
-        </FormGroup>
-      )}
-      <FormGroup title="Column Mappings">
-        {data.filename_column && <FormRow label="Filename" value={data.filename_column} mono />}
-        {data.byte_count_column && <FormRow label="Byte Count" value={data.byte_count_column} mono />}
-        {data.md5 && <FormRow label="MD5" value={typeof data.md5 === "string" ? data.md5 : data.md5.column || JSON.stringify(data.md5)} mono />}
-        {data.sha256 && <FormRow label="SHA256" value={typeof data.sha256 === "string" ? data.sha256 : data.sha256.column || JSON.stringify(data.sha256)} mono />}
-        {!data.filename_column && !data.byte_count_column && !data.md5 && !data.sha256 && <EmptyField />}
-      </FormGroup>
-      {data.browser_upload !== undefined && (
-        <FormRow label="Browser Upload" value={data.browser_upload ? "Allowed" : "Disabled"} />
-      )}
-      {data.filename_ext_filter && Array.isArray(data.filename_ext_filter) && (
-        <FormGroup title="Extension Filter">
-          <div className="flex flex-wrap gap-1">
-            {data.filename_ext_filter.map((ext: string, i: number) => (
-              <Badge key={i} variant="secondary" className="text-[10px] font-mono">{ext}</Badge>
-            ))}
-          </div>
-        </FormGroup>
-      )}
-      {data.display && typeof data.display === "object" && (
-        <FormGroup title="Display Options">
-          {Object.entries(data.display).map(([k, v]) => (
-            <FormRow key={k} label={k} value={String(v)} />
-          ))}
-        </FormGroup>
-      )}
-    </div>
-  );
-}
-
-// ── Citation editor ─────────────────────────────────────────────
-
-function CitationEditor({ data }: { data: any }) {
-  const patternFields = [
-    { key: "journal_pattern", label: "Journal" },
-    { key: "author_pattern", label: "Author" },
-    { key: "title_pattern", label: "Title" },
-    { key: "year_pattern", label: "Year" },
-    { key: "url_pattern", label: "URL" },
-    { key: "id_pattern", label: "ID (DOI)" },
-  ];
-
-  return (
-    <div className="space-y-3">
-      {data.template_engine && <FormRow label="Template Engine" value={data.template_engine} />}
-      <FormGroup title="Citation Patterns">
-        {patternFields.map(({ key, label }) =>
-          data[key] ? (
-            <div key={key} className="mb-2">
-              <div className="text-[10px] text-slate-500 mb-0.5">{label}</div>
-              <CodeBlock value={data[key]} />
-            </div>
-          ) : null
-        )}
-        {patternFields.every(({ key }) => !data[key]) && <EmptyField />}
-      </FormGroup>
-      {data.wait_for && Array.isArray(data.wait_for) && (
-        <FormGroup title="Wait For">
-          <div className="flex flex-wrap gap-1">
-            {data.wait_for.map((key: string, i: number) => (
-              <Badge key={i} variant="secondary" className="text-[10px] font-mono">{key}</Badge>
-            ))}
-          </div>
-        </FormGroup>
-      )}
-    </div>
-  );
-}
-
-// ── Source Definitions editor ────────────────────────────────────
-
-function SourceDefinitionsEditor({ data }: { data: any }) {
-  return (
-    <div className="space-y-3">
-      {/* Columns */}
-      {data.columns !== undefined && (
-        <FormGroup title="Columns">
-          {data.columns === true ? (
-            <span className="text-[11px] text-slate-600">All columns</span>
-          ) : Array.isArray(data.columns) ? (
-            <div className="flex flex-wrap gap-1">
-              {data.columns.map((col: string, i: number) => (
-                <Badge key={i} variant="secondary" className="text-[10px] font-mono">{col}</Badge>
-              ))}
-            </div>
-          ) : (
-            <span className="text-[11px] text-slate-600">{JSON.stringify(data.columns)}</span>
-          )}
-        </FormGroup>
-      )}
-
-      {/* FKeys */}
-      {data.fkeys !== undefined && (
-        <FormGroup title="Foreign Keys">
-          {data.fkeys === true ? (
-            <span className="text-[11px] text-slate-600">All foreign keys</span>
-          ) : Array.isArray(data.fkeys) ? (
-            <div className="space-y-1">
-              {data.fkeys.map((fk: any, i: number) => (
-                <div key={i} className="text-[11px] font-mono text-slate-600">
-                  {Array.isArray(fk) ? fk[1] || fk.join(".") : JSON.stringify(fk)}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <span className="text-[11px] text-slate-600">{JSON.stringify(data.fkeys)}</span>
-          )}
-        </FormGroup>
-      )}
-
-      {/* Sources */}
-      {data.sources && typeof data.sources === "object" && (
-        <FormGroup title="Named Sources">
-          {Object.entries(data.sources).map(([key, val]: [string, any]) => (
-            <div key={key} className="border border-slate-100 rounded p-2 mb-1.5">
-              <div className="text-[11px] font-semibold font-mono text-slate-700 mb-1">{key}</div>
-              {val.source && (
-                <div className="text-[10px] text-slate-500">
-                  <span className="text-slate-400">source:</span>{" "}
-                  <span className="font-mono">{sourcePathToStr(val.source)}</span>
-                </div>
-              )}
-              {val.markdown_name && (
-                <div className="text-[10px] text-slate-500 mt-0.5">
-                  <span className="text-slate-400">name:</span> {val.markdown_name}
-                </div>
-              )}
-              {val.aggregate && (
-                <div className="text-[10px] text-slate-500 mt-0.5">
-                  <span className="text-slate-400">aggregate:</span> {val.aggregate}
-                </div>
-              )}
-            </div>
-          ))}
-        </FormGroup>
-      )}
-
-      {/* Search box */}
-      {data.search_box && typeof data.search_box === "object" && (
-        <FormGroup title="Search Box">
-          {data.search_box.or && Array.isArray(data.search_box.or) ? (
-            <div className="space-y-0.5">
-              {data.search_box.or.map((entry: any, i: number) => (
-                <div key={i} className="text-[11px] font-mono text-slate-600">
-                  {typeof entry === "string" ? entry : entry.source ? sourcePathToStr(entry.source) : JSON.stringify(entry)}
-                  {entry.markdown_name && <span className="text-slate-400 ml-1">"{entry.markdown_name}"</span>}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <ReadOnlyJsonViewer data={data.search_box} />
-          )}
-        </FormGroup>
-      )}
-    </div>
-  );
-}
-
-// ── Foreign Key annotation editor ───────────────────────────────
-
-function ForeignKeyEditor({ data }: { data: any }) {
-  return (
-    <div className="space-y-3">
-      {/* Direction names */}
-      <FormGroup title="Direction Names">
-        {data.to_name && <FormRow label="To Name" value={data.to_name} />}
-        {data.from_name && <FormRow label="From Name" value={data.from_name} />}
-        {data.to_comment && <FormRow label="To Comment" value={data.to_comment} />}
-        {data.from_comment && <FormRow label="From Comment" value={data.from_comment} />}
-        {data.to_comment_display && <FormRow label="To Comment Display" value={data.to_comment_display} />}
-        {data.from_comment_display && <FormRow label="From Comment Display" value={data.from_comment_display} />}
-        {!data.to_name && !data.from_name && !data.to_comment && !data.from_comment && <EmptyField />}
-      </FormGroup>
-
-      {/* Domain filter */}
-      {(data.domain_filter || data.domain_filter_pattern) && (
-        <FormGroup title="Domain Filter">
-          {data.domain_filter?.ermrest_path_pattern && (
-            <div className="mb-1">
-              <div className="text-[10px] text-slate-500 mb-0.5">ERMrest Path Pattern</div>
-              <CodeBlock value={data.domain_filter.ermrest_path_pattern} />
-            </div>
-          )}
-          {data.domain_filter?.display_markdown_pattern && (
-            <div>
-              <div className="text-[10px] text-slate-500 mb-0.5">Display Markdown Pattern</div>
-              <CodeBlock value={data.domain_filter.display_markdown_pattern} />
-            </div>
-          )}
-          {data.domain_filter_pattern && (
-            <div>
-              <div className="text-[10px] text-amber-500 mb-0.5">Legacy: domain_filter_pattern</div>
-              <CodeBlock value={data.domain_filter_pattern} />
-            </div>
-          )}
-        </FormGroup>
-      )}
-
-      {/* Display (contextualized) */}
-      {data.display && typeof data.display === "object" && (
-        <FormGroup title="Display">
-          <ContextTabs contexts={Object.keys(data.display)}>
-            {(ctx) => {
-              const value = data.display[ctx];
-              if (typeof value === "string") return <ContextReference target={value} />;
-              if (!value || typeof value !== "object") return null;
-              return (
-                <div className="space-y-1.5">
-                  {value.column_order !== undefined && (
-                    <div>
-                      <div className="text-[10px] text-slate-500 mb-0.5">Column Order</div>
-                      {value.column_order === false ? (
-                        <span className="text-[11px] text-slate-400 italic">Sorting disabled</span>
-                      ) : Array.isArray(value.column_order) ? (
-                        <SortKeyList keys={value.column_order} />
-                      ) : null}
-                    </div>
-                  )}
-                  {value.show_foreign_key_link !== undefined && (
-                    <FormRow label="Show FK Link" value={value.show_foreign_key_link ? "Yes" : "No"} />
-                  )}
-                </div>
-              );
-            }}
-          </ContextTabs>
-        </FormGroup>
-      )}
-    </div>
-  );
-}
-
-// ── Key Display editor ──────────────────────────────────────────
-
-function KeyDisplayEditor({ data }: { data: any }) {
-  const contexts = Object.keys(data);
-  if (contexts.length === 0) return <EmptyField />;
-
-  return (
-    <ContextTabs contexts={contexts}>
-      {(ctx) => {
-        const value = data[ctx];
-        if (typeof value === "string") return <ContextReference target={value} />;
-        if (!value || typeof value !== "object") return null;
-        return (
-          <div className="space-y-3">
-            {value.markdown_pattern && (
-              <FormGroup title="Markdown Pattern">
-                <CodeBlock value={value.markdown_pattern} />
-              </FormGroup>
-            )}
-            {value.template_engine && <FormRow label="Template Engine" value={value.template_engine} />}
-            {value.column_order !== undefined && (
-              <FormGroup title="Column Order">
-                {value.column_order === false ? (
-                  <span className="text-[11px] text-slate-400 italic">Sorting disabled</span>
-                ) : Array.isArray(value.column_order) ? (
-                  <SortKeyList keys={value.column_order} />
-                ) : (
-                  <span className="text-[11px] text-slate-600">{JSON.stringify(value.column_order)}</span>
-                )}
-              </FormGroup>
-            )}
-          </div>
-        );
-      }}
-    </ContextTabs>
-  );
-}
+// ── Removed: VisibleColumnsEditor, VisibleForeignKeysEditor, TableDisplayEditor,
+// ── ColumnDisplayEditor, AssetEditor, CitationEditor, SourceDefinitionsEditor,
+// ── ForeignKeyEditor, KeyDisplayEditor — replaced by schema-driven SchemaFormEditor
 
 // ── Shared form components ──────────────────────────────────────
 
-function FormGroup({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{title}</div>
-      <div className="space-y-1">{children}</div>
-    </div>
-  );
-}
-
-function FormRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+/** Read-only label/value row used in DisplayEditor sub-editors. */
+function FormRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start gap-2 py-0.5">
       <span className="text-[11px] text-slate-500 w-[7rem] flex-shrink-0">{label}</span>
-      <span className={`text-[11px] text-slate-700 break-all ${mono ? "font-mono" : ""}`}>{value}</span>
-    </div>
-  );
-}
-
-function CheckboxDisplay({ label, checked }: { label: string; checked: boolean }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${checked ? "bg-slate-700 border-slate-700" : "bg-white border-slate-300"}`}>
-        {checked && (
-          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-        )}
-      </div>
-      <span className="text-[11px] text-slate-600">{label}</span>
+      <span className="text-[11px] text-slate-700 break-all">{value}</span>
     </div>
   );
 }
 
 function EmptyField() {
   return <span className="text-[11px] text-slate-400 italic underline decoration-dashed decoration-slate-300 underline-offset-2">Not set</span>;
-}
-
-function ContextReference({ target }: { target: string }) {
-  return (
-    <div className="text-[11px] text-slate-500 italic py-1">
-      References context: <span className="font-mono font-medium">{target}</span>
-    </div>
-  );
-}
-
-/** Detect whether a string contains Handlebars expressions */
-function isHandlebarsTemplate(value: string): boolean {
-  return /\{\{[^}]+\}\}/.test(value);
-}
-
-/**
- * Chaise/Deriva Handlebars helper reference.
- * These are the helpers available in Chaise templates beyond standard Handlebars.
- */
-const HANDLEBARS_HELPERS = [
-  { name: "{{#if}}", syntax: "{{#if value}}...{{else}}...{{/if}}", desc: "Conditional rendering" },
-  { name: "{{#each}}", syntax: "{{#each array}}{{this}}{{/each}}", desc: "Iterate over arrays" },
-  { name: "{{#unless}}", syntax: "{{#unless value}}...{{/unless}}", desc: "Inverse conditional" },
-  { name: "{{#with}}", syntax: "{{#with object}}...{{/with}}", desc: "Change scope context" },
-  { name: "{{encode}}", syntax: "{{#encode}}...{{/encode}}", desc: "URI-encode the enclosed content" },
-  { name: "{{escape}}", syntax: "{{#escape}}...{{/escape}}", desc: "HTML-escape content to prevent XSS" },
-  { name: "{{encodeFacet}}", syntax: "{{#encodeFacet}}{\"and\":[...]}{{/encodeFacet}}", desc: "Encode a facet blob for use in Chaise URLs" },
-  { name: "{{formatDate}}", syntax: "{{formatDate value format}}", desc: "Format a date/timestamp (e.g., \"YYYY-MM-DD\")" },
-  { name: "{{humanizeBytes}}", syntax: "{{humanizeBytes value}}", desc: "Convert byte count to human-readable (e.g., 1.5 MB)" },
-  { name: "{{$moment}}", syntax: "{{$moment.day}}, {{$moment.timestamp}}", desc: "Current date/time values" },
-  { name: "{{$session}}", syntax: "{{$session.client.display_name}}", desc: "Current user session info" },
-  { name: "{{$catalog}}", syntax: "{{$catalog.snapshot}}", desc: "Catalog-level variables" },
-  { name: "{{$dcctx}}", syntax: "{{$dcctx.contextHeaderParams}}", desc: "Deriva client context parameters" },
-  { name: "{{{value}}}", syntax: "{{{column_name}}}", desc: "Triple-brace: raw HTML output (no escaping)" },
-  { name: "{{jsonStringify}}", syntax: "{{jsonStringify value}}", desc: "Serialize value as JSON string" },
-  { name: "{{regexMatch}}", syntax: "{{#if (regexMatch value \"pattern\")}}...", desc: "Test if value matches a regex" },
-  { name: "{{toTitleCase}}", syntax: "{{toTitleCase value}}", desc: "Convert text to Title Case" },
-] as const;
-
-function CodeBlock({ value, label }: { value: string; label?: string }) {
-  const isTemplate = isHandlebarsTemplate(value);
-
-  // Simple syntax highlighting for Handlebars expressions
-  const highlighted = isTemplate
-    ? value.split(/(\{\{\{?[^}]+\}\}\}?)/).map((segment, i) =>
-        /^\{\{/.test(segment) ? (
-          <span key={i} className="text-brand font-semibold">{segment}</span>
-        ) : (
-          <span key={i}>{segment}</span>
-        )
-      )
-    : value;
-
-  return (
-    <div className="group">
-      {label && (
-        <div className="text-[10px] text-slate-500 mb-0.5">{label}</div>
-      )}
-      <div className="relative">
-        <code className="text-[10px] font-mono text-slate-600 bg-slate-50 rounded p-1.5 block whitespace-pre-wrap break-all">
-          {highlighted}
-        </code>
-        {isTemplate && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="absolute top-1 right-1 p-0.5 rounded text-slate-300 hover:text-brand hover:bg-white transition-colors opacity-0 group-hover:opacity-100">
-                <HelpCircle className="h-3.5 w-3.5" />
-              </button>
-            </PopoverTrigger>
-          <PopoverContent side="left" align="start" className="w-[320px] max-h-[400px] overflow-y-auto p-0 z-[60]">
-            <div className="px-3 py-2 border-b border-slate-100 bg-slate-50">
-              <div className="text-xs font-semibold text-slate-800">Handlebars Template Reference</div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Chaise/Deriva-specific helpers and syntax</div>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {HANDLEBARS_HELPERS.map((h) => (
-                <div key={h.name} className="px-3 py-1.5 hover:bg-chaise-hover/30">
-                  <code className="text-[10px] font-mono font-semibold text-brand">{h.name}</code>
-                  <div className="text-[10px] text-slate-500 mt-0.5">{h.desc}</div>
-                  <code className="text-[9px] font-mono text-slate-400 mt-0.5 block">{h.syntax}</code>
-                </div>
-              ))}
-            </div>
-            <div className="px-3 py-2 border-t border-slate-100 bg-slate-50">
-              <div className="text-[10px] text-slate-400">
-                Use <code className="font-mono text-brand">{"{{column_name}}"}</code> to reference column values.
-                Triple braces <code className="font-mono text-brand">{"{{{value}}}"}</code> output raw HTML.
-              </div>
-            </div>
-          </PopoverContent>
-          </Popover>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SortKeyList({ keys }: { keys: any[] }) {
-  return (
-    <div className="space-y-0.5">
-      {keys.map((key: any, i: number) => {
-        const col = typeof key === "string" ? key : key.column;
-        const desc = typeof key === "object" && key.descending;
-        return (
-          <div key={i} className="text-[11px] font-mono text-slate-600 flex items-center gap-1">
-            <span className="text-slate-400 w-4 text-right tabular-nums">{i + 1}.</span>
-            {col}
-            {desc && <Badge variant="outline" className="text-[10px] px-1 py-0">DESC</Badge>}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Contextualized property (key=context, value=setting) ────────
-
-function ContextualizedProperty({ data }: { data: Record<string, any> }) {
-  const entries = Object.entries(data);
-  if (entries.length === 0) return <EmptyField />;
-
-  return (
-    <div className="space-y-0.5">
-      {entries.map(([ctx, val]) => (
-        <div key={ctx} className="flex items-start gap-2 text-[11px] py-0.5">
-          <span className="text-slate-400 font-mono w-20 flex-shrink-0 truncate">{ctx}</span>
-          <span className="text-slate-600 break-all">
-            {typeof val === "boolean" ? (val ? "true" : "false") : typeof val === "object" ? JSON.stringify(val) : String(val)}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 // ── Context tabs ────────────────────────────────────────────────
@@ -2260,78 +1674,4 @@ function ContextTabs({ contexts, children }: { contexts: string[]; children: (ct
       {children(active)}
     </div>
   );
-}
-
-// ── Source entry list (visible-columns / visible-fks) ───────────
-
-function SourceEntryList({ entries, isFilter }: { entries: any[]; isFilter?: boolean }) {
-  if (entries.length === 0) return <EmptyField />;
-
-  return (
-    <div className="border border-slate-100 rounded overflow-hidden">
-      <div className="flex bg-slate-50 border-b border-slate-100 px-2 py-1">
-        <span className="text-[10px] font-semibold text-slate-400 uppercase w-20 flex-shrink-0">Type</span>
-        <span className="text-[10px] font-semibold text-slate-400 uppercase flex-1">Source</span>
-      </div>
-      {entries.map((entry, i) => {
-        const { type, source } = describeSourceEntry(entry, isFilter);
-        return (
-          <div key={i} className="flex items-start px-2 py-1 border-b border-slate-50 last:border-b-0 hover:bg-slate-50">
-            <span className="text-[10px] w-20 flex-shrink-0">
-              <Badge variant="outline" className={`text-[10px] px-1 py-0 ${
-                type === "Column" ? "border-sky-200 text-sky-600"
-                : type === "Constraint" ? "border-amber-200 text-amber-600"
-                : type === "Facet" ? "border-violet-200 text-violet-600"
-                : "border-slate-200 text-slate-500"
-              }`}>{type}</Badge>
-            </span>
-            <span className="text-[11px] font-mono text-slate-600 break-all flex-1">{source}</span>
-          </div>
-        );
-      })}
-      <div className="bg-slate-50 px-2 py-0.5 text-[10px] text-slate-400">
-        {entries.length} {entries.length === 1 ? "entry" : "entries"}
-      </div>
-    </div>
-  );
-}
-
-function describeSourceEntry(entry: any, isFilter?: boolean): { type: string; source: string } {
-  if (typeof entry === "string") return { type: "Column", source: entry };
-  if (Array.isArray(entry)) {
-    return { type: "Constraint", source: entry.length === 2 ? entry[1] : JSON.stringify(entry) };
-  }
-  if (typeof entry === "object" && entry !== null) {
-    if (isFilter) {
-      const src = entry.source ? sourcePathToStr(entry.source) : entry.sourcekey || "virtual";
-      const name = entry.markdown_name || "";
-      return { type: "Facet", source: name ? `${name} (${src})` : src };
-    }
-    const src = entry.source ? sourcePathToStr(entry.source) : entry.sourcekey || "virtual";
-    const parts = [src];
-    if (entry.aggregate) parts.push(`agg:${entry.aggregate}`);
-    if (entry.markdown_name) parts.push(`"${entry.markdown_name}"`);
-    return { type: "Pseudo", source: parts.join(" ") };
-  }
-  return { type: "?", source: JSON.stringify(entry) };
-}
-
-function sourcePathToStr(source: any): string {
-  if (typeof source === "string") return source;
-  if (Array.isArray(source)) {
-    return source
-      .map((step: any) => {
-        if (typeof step === "string") return step;
-        if (typeof step === "object") {
-          if (step.inbound)
-            return `← ${Array.isArray(step.inbound) ? step.inbound[1] || step.inbound.join(".") : step.inbound}`;
-          if (step.outbound)
-            return `→ ${Array.isArray(step.outbound) ? step.outbound[1] || step.outbound.join(".") : step.outbound}`;
-          return JSON.stringify(step);
-        }
-        return String(step);
-      })
-      .join(" / ");
-  }
-  return JSON.stringify(source);
 }
