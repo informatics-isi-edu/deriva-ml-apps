@@ -50,7 +50,36 @@ VITE_CATALOG_HOST=localhost
 VITE_CATALOG_ID=1
 ```
 
-When deployed on the same origin as a Deriva server, credentials are sent automatically. For cross-origin access, the Deriva server must have CORS configured for credentialed requests.
+When deployed on the same origin as a Deriva server, credentials are sent automatically. For cross-origin access, use the included proxy server (see below).
+
+## Development Proxy
+
+A Python reverse proxy (`proxy.py`) lets you run any app locally and connect to a remote Deriva server without CORS issues. It serves the app's built static files and forwards `/ermrest`, `/authn`, and `/chaise` requests to the backend, passing cookies through for authentication.
+
+**No dependencies** — uses only the Python 3.10+ standard library.
+
+```bash
+# Build the app first
+cd erd-browser && pnpm build && cd ..
+
+# Start the proxy
+python proxy.py --backend dev.example.org --app erd-browser
+
+# Opens at http://127.0.0.1:8080
+```
+
+Options:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--backend` | (required) | Deriva server hostname |
+| `--app` | (required) | App name (serves `<name>/dist/`) or path to static files |
+| `--port` | 8080 | Local port |
+| `--bind` | 127.0.0.1 | Bind address |
+
+The proxy accepts self-signed certificates on the backend, which is common for local Deriva dev servers.
+
+**Note:** You must be authenticated with the Deriva server first. Log in via Chaise in your browser — the proxy forwards your session cookies.
 
 ## Related Projects
 
