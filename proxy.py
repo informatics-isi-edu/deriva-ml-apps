@@ -6,11 +6,11 @@ Serves static files from an app's build directory and proxies API requests
 to handle authentication. This avoids CORS issues during development.
 
 Usage:
-    python proxy.py --backend dev.example.org --app erd-browser
-    python proxy.py --backend dev.example.org --app erd-browser/dist --port 9000
+    python proxy.py --backend dev.example.org --app schema-workbench
+    python proxy.py --backend dev.example.org --app schema-workbench/dist --port 9000
 
 The app argument can be either:
-  - An app name (e.g., "erd-browser") — serves from <name>/dist/
+  - An app name (e.g., "schema-workbench") — serves from <name>/dist/
   - A path to a directory containing built static files
 
 Requirements: Python 3.10+ (stdlib only, no dependencies).
@@ -184,9 +184,9 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python proxy.py --backend dev.example.org --app erd-browser
-  python proxy.py --backend dev.example.org --app erd-browser --port 9000
-  python proxy.py --backend dev.example.org --app erd-browser/dist
+  python proxy.py --backend dev.example.org --app schema-workbench
+  python proxy.py --backend dev.example.org --app schema-workbench --port 9000
+  python proxy.py --backend dev.example.org --app schema-workbench/dist
         """,
     )
     parser.add_argument(
@@ -217,7 +217,7 @@ Examples:
         static_dir = app_path / "dist"
     else:
         print(f"Error: Cannot find static files at {app_path} or {app_path / 'dist'}")
-        print("Did you build the app first? (e.g., cd erd-browser && pnpm build)")
+        print("Did you build the app first? (e.g., cd schema-workbench && pnpm build)")
         sys.exit(1)
 
     # Ensure backend has scheme

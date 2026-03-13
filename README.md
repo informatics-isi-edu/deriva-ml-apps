@@ -4,7 +4,7 @@ Web applications for exploring and managing [Deriva](https://github.com/informat
 
 ## Applications
 
-### ERD Browser
+### Schema Workbench
 
 An interactive entity-relationship diagram browser for Deriva catalogs. Visualizes tables, foreign key relationships, and annotations in a navigable graph interface.
 
@@ -21,7 +21,7 @@ An interactive entity-relationship diagram browser for Deriva catalogs. Visualiz
 #### Quick Start
 
 ```bash
-cd erd-browser
+cd schema-workbench
 pnpm install
 pnpm dev
 ```
@@ -60,10 +60,10 @@ A Python reverse proxy (`proxy.py`) lets you run any app locally and connect to 
 
 ```bash
 # Build the app first
-cd erd-browser && pnpm build && cd ..
+cd schema-workbench && pnpm build && cd ..
 
 # Start the proxy
-python proxy.py --backend dev.example.org --app erd-browser
+python proxy.py --backend dev.example.org --app schema-workbench
 
 # Opens at http://127.0.0.1:8080
 ```
