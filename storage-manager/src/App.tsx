@@ -146,6 +146,11 @@ export default function App() {
       .map((e) => e.rid)
       .filter((r): r is string => r !== null);
 
+    const skipped = selectedEntries.length - rids.length;
+    if (skipped > 0) {
+      toast.warning(`${skipped} selected entries have no RID and cannot be deleted`);
+    }
+
     if (rids.length === 0) return;
 
     setDeleting(true);

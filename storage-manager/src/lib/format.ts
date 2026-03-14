@@ -7,5 +7,5 @@ export function humanSize(bytes: number): string {
     size /= 1024;
     i++;
   }
-  return `${size.toFixed(1)} ${units[i]}`;
+  return i === 0 ? `${Math.round(size)} B` : `${size.toFixed(1)} ${units[i]}`;
 }
