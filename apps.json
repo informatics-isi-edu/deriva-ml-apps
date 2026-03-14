@@ -1,6 +1,15 @@
 {
   "apps": [
     {
+      "id": "app-launcher",
+      "name": "App Launcher",
+      "description": "Browse Deriva servers, discover catalogs, and launch applications",
+      "icon": "rocket",
+      "category": "hub",
+      "requires_catalog": false,
+      "dist_path": "app-launcher/dist"
+    },
+    {
       "id": "schema-workbench",
       "name": "Schema Workbench",
       "description": "Interactive entity-relationship diagram browser for Deriva catalogs",
