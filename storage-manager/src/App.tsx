@@ -1,29 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { HardDrive, RefreshCw, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { StorageTable } from "@/components/StorageTable";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { fetchStorageEntries, deleteStorageEntries } from "@/api";
+import { humanSize } from "@/lib/format";
 import type {
   StorageEntry,
   CategoryFilter,
   SortField,
   SortDirection,
 } from "@/types";
-
-function humanSize(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
-  let size = bytes;
-  while (size >= 1024 && i < units.length - 1) {
-    size /= 1024;
-    i++;
-  }
-  return `${size.toFixed(1)} ${units[i]}`;
-}
 
 export default function App() {
   const [entries, setEntries] = useState<StorageEntry[]>([]);
@@ -36,11 +26,11 @@ export default function App() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const loadEntries = useCallback(async () => {
+  const loadEntries = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchStorageEntries("all");
+      const data = await fetchStorageEntries("all", signal);
       if (data.status === "error") {
         setError(data.error ?? "Unknown error");
         return;
@@ -48,6 +38,7 @@ export default function App() {
       setEntries(data.entries);
       setSelected(new Set());
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
       setLoading(false);
@@ -55,8 +46,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    loadEntries();
+    const controller = new AbortController();
+    loadEntries(controller.signal);
+    return () => controller.abort();
   }, [loadEntries]);
+
+  // Clear selection when category filter changes to prevent cross-tab deletion
+  useEffect(() => {
+    setSelected(new Set());
+  }, [categoryFilter]);
 
   // Filter + sort
   const visibleEntries = useMemo(() => {
@@ -154,15 +152,26 @@ export default function App() {
     try {
       const result = await deleteStorageEntries(rids, true);
       if (result.status === "success") {
+        const { deleted, size_freed, errors } = result;
         // Remove deleted entries from state
-        const deletedPaths = new Set(
-          (result.deleted ?? []).map((e) => e.path),
-        );
+        const deletedPaths = new Set(deleted.map((e) => e.path));
         setEntries((prev) => prev.filter((e) => !deletedPaths.has(e.path)));
         setSelected(new Set());
+
+        toast.success(`Deleted ${deleted.length} entries, freed ${size_freed}`);
+
+        if (errors.length > 0) {
+          toast.warning(
+            `${errors.length} entries failed to delete: ${errors.map((e) => e.error).join(", ")}`,
+          );
+        }
+      } else if (result.status === "error") {
+        toast.error("Failed to delete entries: " + result.error);
       }
-    } catch {
-      // Will show in UI
+    } catch (e: unknown) {
+      const errorMessage =
+        e instanceof Error ? e.message : "Unknown error";
+      toast.error("Failed to delete entries: " + errorMessage);
     } finally {
       setDeleting(false);
       setShowConfirm(false);
@@ -208,7 +217,7 @@ export default function App() {
             <Button
               variant="outline"
               size="sm"
-              onClick={loadEntries}
+              onClick={() => loadEntries()}
               disabled={loading}
               className="gap-1.5 text-xs"
             >
@@ -309,7 +318,7 @@ export default function App() {
                 Failed to load storage entries
               </p>
               <p className="text-xs text-muted-foreground mb-4">{error}</p>
-              <Button variant="outline" size="sm" onClick={loadEntries}>
+              <Button variant="outline" size="sm" onClick={() => loadEntries()}>
                 Retry
               </Button>
             </div>

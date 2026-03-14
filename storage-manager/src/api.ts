@@ -2,12 +2,30 @@ import type { StorageListResponse, DeleteResponse } from "./types.ts";
 
 const API_BASE = "/api/storage";
 
-export async function fetchStorageEntries(filter = "all"): Promise<StorageListResponse> {
-  const res = await fetch(`${API_BASE}?filter=${encodeURIComponent(filter)}`);
+function validateStatus(data: unknown): asserts data is { status: string } {
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    !("status" in data) ||
+    typeof (data as Record<string, unknown>).status !== "string"
+  ) {
+    throw new Error("Invalid API response: missing or non-string 'status' field");
+  }
+}
+
+export async function fetchStorageEntries(
+  filter = "all",
+  signal?: AbortSignal,
+): Promise<StorageListResponse> {
+  const res = await fetch(`${API_BASE}?filter=${encodeURIComponent(filter)}`, {
+    signal,
+  });
   if (!res.ok) {
     throw new Error(`Failed to fetch storage entries: ${res.status} ${res.statusText}`);
   }
-  return res.json();
+  const data: unknown = await res.json();
+  validateStatus(data);
+  return data as StorageListResponse;
 }
 
 export async function deleteStorageEntries(
@@ -22,5 +40,7 @@ export async function deleteStorageEntries(
   if (!res.ok) {
     throw new Error(`Failed to delete storage entries: ${res.status} ${res.statusText}`);
   }
-  return res.json();
+  const data: unknown = await res.json();
+  validateStatus(data);
+  return data as DeleteResponse;
 }
