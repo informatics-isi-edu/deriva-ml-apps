@@ -1,0 +1,22 @@
+{
+  "apps": [
+    {
+      "id": "schema-workbench",
+      "name": "Schema Workbench",
+      "description": "Interactive entity-relationship diagram browser for Deriva catalogs",
+      "icon": "database",
+      "category": "exploration",
+      "requires_catalog": true,
+      "dist_path": "schema-workbench/dist"
+    },
+    {
+      "id": "storage-manager",
+      "name": "Storage Manager",
+      "description": "Browse and clean up cached datasets and execution directories",
+      "icon": "hard-drive",
+      "category": "management",
+      "requires_catalog": false,
+      "dist_path": "storage-manager/dist"
+    }
+  ]
+}

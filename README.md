@@ -52,6 +52,45 @@ VITE_CATALOG_ID=1
 
 When deployed on the same origin as a Deriva server, credentials are sent automatically. For cross-origin access, use the included proxy server (see below).
 
+### Storage Manager
+
+A dashboard for browsing and cleaning up cached datasets and execution directories in `~/.deriva-ml/`. Helps reclaim disk space from accumulated BDBag downloads and completed execution working directories.
+
+**Features:**
+- Table view of all storage entries with RID, location, category, size, item count, and modification date
+- Category filter tabs (All / Datasets / Executions / Other)
+- Sortable columns with size-based color coding for large entries
+- Multi-select with checkboxes and bulk delete
+- Selection summary bar showing count and total size to free
+- Delete confirmation dialog with dry-run preview
+
+**Tech stack:** React 19, TypeScript, Vite, Tailwind CSS, shadcn/ui
+
+#### Quick Start
+
+```bash
+cd storage-manager
+pnpm install
+pnpm build
+```
+
+Launch via the MCP server:
+
+```
+start_app("storage-manager")
+```
+
+Or use the development proxy directly:
+
+```bash
+pnpm dev   # Starts at http://localhost:5174
+# Requires the proxy running on port 8080 for /api/storage endpoints
+```
+
+## App Catalog
+
+The `apps.json` file at the repo root lists all available applications with metadata. The MCP server's `list_apps()` tool reads this catalog to discover and launch apps.
+
 ## Development Proxy
 
 A Python reverse proxy (`proxy.py`) lets you run any app locally and connect to a remote Deriva server without CORS issues. It serves the app's built static files and forwards `/ermrest`, `/authn`, and `/chaise` requests to the backend, passing cookies through for authentication.
