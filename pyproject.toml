@@ -1,0 +1,45 @@
+[project]
+name = "deriva-ml-apps"
+dynamic = ["version"]
+description = "Web applications and proxy server for DerivaML catalogs"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [
+    { name = "ISRD", email = "isrd-dev@isi.edu" },
+]
+dependencies = [
+    "bump-my-version",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+deriva-ml-apps = "deriva_apps.cli:main"
+bump-version = "deriva_apps.version:bump"
+
+[build-system]
+requires = ["setuptools>=80", "setuptools_scm[toml]>=8", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+python-preference = "only-managed"
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.bumpversion]
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+commit = true
+tag = true
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = false
+message = "Bump version: {current_version} → {new_version}"
+post_commit_hooks = ["git push", "git push --tags"]
