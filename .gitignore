@@ -18,6 +18,17 @@ Thumbs.db
 *.swp
 *.swo
 
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+uv.lock
+
 # Logs
 *.log
 npm-debug.log*
+
+# Test/build artifacts
+.pytest_cache/
+htmlcov/
