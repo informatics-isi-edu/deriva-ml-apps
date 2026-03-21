@@ -61,6 +61,7 @@ import {
 } from "@/hooks/useAnnotationDraft";
 import { getSchemaForTag, classifySchema } from "@/schemas";
 import { SchemaFormEditor, FlagAnnotationEditor } from "@/components/erd/rjsf";
+import { validateAnnotation } from "@/annotation-validator";
 
 // Tag alias for custom editor override
 const TAG_DISPLAY = TAG.display;
@@ -710,6 +711,7 @@ function AnnotationBrowser({
               {presentTags.map((tag) => {
                 const info = getTagInfo(tag);
                 const name = info?.name || shortTagName(tag);
+                const validation = validateAnnotation(tag, draft.annotations[tag]);
                 return (
                   <button
                     key={tag}
@@ -721,7 +723,17 @@ function AnnotationBrowser({
                     }`}
                     title={tag}
                   >
-                    <div className="truncate">{name}</div>
+                    <div className="flex items-center gap-1.5 truncate">
+                      {validation.hasSchema && (
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                            validation.valid ? "bg-emerald-500" : "bg-red-500"
+                          }`}
+                          title={validation.valid ? "Valid" : `${validation.errors.length} validation error(s)`}
+                        />
+                      )}
+                      <span className="truncate">{name}</span>
+                    </div>
                     {info?.contextualized && (
                       <div className="text-[10px] text-slate-400 mt-0.5">
                         contextualized

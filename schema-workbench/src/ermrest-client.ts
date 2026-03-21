@@ -3,6 +3,7 @@
 // Same-origin requests use credentials; cross-origin requests are anonymous.
 
 import type { CatalogSchema, EnrichedTable } from "./types";
+import type { AnnotationDiff } from "./annotation-io";
 import { classifyTable } from "./types";
 import {
   getCatalogConfig,
@@ -382,6 +383,171 @@ export async function deleteCatalogAnnotation(
   if (!resp.ok) {
     throw new Error(`Failed to delete catalog annotation: ${resp.status} ${resp.statusText}`);
   }
+}
+
+/**
+ * Apply all changes from an annotation diff to the catalog in batch.
+ * Uses existing put/delete annotation functions. Continues on individual
+ * failures and reports them at the end.
+ */
+export async function bulkSaveAnnotations(
+  diff: AnnotationDiff,
+  schema: CatalogSchema,
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ saved: number; failed: Array<{ path: string; error: string }> }> {
+  let saved = 0;
+  const failed: Array<{ path: string; error: string }> = [];
+
+  // Count total operations
+  let total = 0;
+  if (diff.changes.catalog) total += diff.changes.catalog.length;
+  for (const changes of Object.values(diff.changes.schemas)) total += changes.length;
+  for (const schemaTables of Object.values(diff.changes.tables)) {
+    for (const changes of Object.values(schemaTables)) total += changes.length;
+  }
+  for (const schemaTables of Object.values(diff.changes.columns)) {
+    for (const tableColumns of Object.values(schemaTables)) {
+      for (const changes of Object.values(tableColumns)) total += changes.length;
+    }
+  }
+  for (const schemaTables of Object.values(diff.changes.keys)) {
+    for (const tableKeys of Object.values(schemaTables)) {
+      for (const changes of Object.values(tableKeys)) total += changes.length;
+    }
+  }
+  for (const schemaTables of Object.values(diff.changes.foreign_keys)) {
+    for (const tableFks of Object.values(schemaTables)) {
+      for (const changes of Object.values(tableFks)) total += changes.length;
+    }
+  }
+
+  let done = 0;
+
+  async function apply(
+    path: string,
+    fn: () => Promise<void>,
+  ) {
+    try {
+      await fn();
+      saved++;
+    } catch (err) {
+      failed.push({ path, error: err instanceof Error ? err.message : String(err) });
+    }
+    done++;
+    onProgress?.(done, total);
+  }
+
+  // Catalog-level
+  if (diff.changes.catalog) {
+    for (const change of diff.changes.catalog) {
+      if (change.type === "delete") {
+        await apply(`catalog:${change.tag}`, () => deleteCatalogAnnotation(change.tag));
+      } else {
+        await apply(`catalog:${change.tag}`, () => putCatalogAnnotation(change.tag, change.value));
+      }
+    }
+  }
+
+  // Schema-level
+  for (const [schemaName, changes] of Object.entries(diff.changes.schemas)) {
+    for (const change of changes) {
+      if (change.type === "delete") {
+        await apply(`${schemaName}:${change.tag}`, () => deleteSchemaAnnotation(schemaName, change.tag));
+      } else {
+        await apply(`${schemaName}:${change.tag}`, () => putSchemaAnnotation(schemaName, change.tag, change.value));
+      }
+    }
+  }
+
+  // Table-level
+  for (const [schemaName, schemaTables] of Object.entries(diff.changes.tables)) {
+    for (const [tableName, changes] of Object.entries(schemaTables)) {
+      for (const change of changes) {
+        const path = `${schemaName}.${tableName}:${change.tag}`;
+        if (change.type === "delete") {
+          await apply(path, () => deleteTableAnnotation(schemaName, tableName, change.tag));
+        } else {
+          await apply(path, () => putTableAnnotation(schemaName, tableName, change.tag, change.value));
+        }
+      }
+    }
+  }
+
+  // Column-level
+  for (const [schemaName, schemaTables] of Object.entries(diff.changes.columns)) {
+    for (const [tableName, tableColumns] of Object.entries(schemaTables)) {
+      for (const [colName, changes] of Object.entries(tableColumns)) {
+        for (const change of changes) {
+          const path = `${schemaName}.${tableName}.${colName}:${change.tag}`;
+          if (change.type === "delete") {
+            await apply(path, () => deleteColumnAnnotation(schemaName, tableName, colName, change.tag));
+          } else {
+            await apply(path, () => putColumnAnnotation(schemaName, tableName, colName, change.tag, change.value));
+          }
+        }
+      }
+    }
+  }
+
+  // Key-level
+  for (const [schemaName, schemaTables] of Object.entries(diff.changes.keys)) {
+    for (const [tableName, tableKeys] of Object.entries(schemaTables)) {
+      for (const [keyName, changes] of Object.entries(tableKeys)) {
+        // Look up the key columns from the schema model
+        const keyInfo = schema.schemas[schemaName]?.tables[tableName]?.keys.find(
+          (k) => k.constraint_name[1] === keyName,
+        );
+        if (!keyInfo) {
+          for (const change of changes) {
+            failed.push({ path: `${schemaName}.${tableName}.key:${keyName}:${change.tag}`, error: `Key "${keyName}" not found in schema` });
+            done++;
+            onProgress?.(done, total);
+          }
+          continue;
+        }
+        for (const change of changes) {
+          const path = `${schemaName}.${tableName}.key:${keyName}:${change.tag}`;
+          if (change.type === "delete") {
+            await apply(path, () => deleteKeyAnnotation(schemaName, tableName, keyInfo.columns, change.tag));
+          } else {
+            await apply(path, () => putKeyAnnotation(schemaName, tableName, keyInfo.columns, change.tag, change.value));
+          }
+        }
+      }
+    }
+  }
+
+  // Foreign key-level
+  for (const [schemaName, schemaTables] of Object.entries(diff.changes.foreign_keys)) {
+    for (const [tableName, tableFks] of Object.entries(schemaTables)) {
+      for (const [fkName, changes] of Object.entries(tableFks)) {
+        // Look up the FK details from the schema model
+        const fkInfo = schema.schemas[schemaName]?.tables[tableName]?.foreign_keys.find(
+          (fk) => fk.constraint_name[1] === fkName,
+        );
+        if (!fkInfo) {
+          for (const change of changes) {
+            failed.push({ path: `${schemaName}.${tableName}.fk:${fkName}:${change.tag}`, error: `FK "${fkName}" not found in schema` });
+            done++;
+            onProgress?.(done, total);
+          }
+          continue;
+        }
+        // Parse referenced table: "refSchema.refTable"
+        const [refSchema, refTable] = fkInfo.referenced_table.split(".");
+        for (const change of changes) {
+          const path = `${schemaName}.${tableName}.fk:${fkName}:${change.tag}`;
+          if (change.type === "delete") {
+            await apply(path, () => deleteForeignKeyAnnotation(schemaName, tableName, fkInfo.columns, refSchema, refTable, fkInfo.referenced_columns, change.tag));
+          } else {
+            await apply(path, () => putForeignKeyAnnotation(schemaName, tableName, fkInfo.columns, refSchema, refTable, fkInfo.referenced_columns, change.tag, change.value));
+          }
+        }
+      }
+    }
+  }
+
+  return { saved, failed };
 }
 
 // ── Schema parsing ────────────────────────────────────────────────

@@ -38,7 +38,7 @@ export default function DataBrowser({ table }: DataBrowserProps) {
   const [useVisibleCols, setUseVisibleCols] = useState(true);
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set());
   const [searchInput, setSearchInput] = useState("");
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Ref to track the active search term for fetches (avoids effect loops)
   const activeSearchRef = useRef("");
 

@@ -1,6 +1,5 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  darkMode: ["class"],
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -8,11 +7,20 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"IBM Plex Sans"', "system-ui", "sans-serif"],
-        display: ['"Instrument Serif"', "Georgia", "serif"],
-        mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
+        // Match Chaise's font stack exactly
+        sans: [
+          "HelveticaNeue-Light",
+          '"Helvetica Neue Light"',
+          '"Helvetica Neue"',
+          "Helvetica",
+          "Arial",
+          '"Lucida Grande"',
+          "sans-serif",
+        ],
+        mono: ["ui-monospace", "SFMono-Regular", "monospace"],
       },
       colors: {
+        // Chaise color map (from _color-map.scss)
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -46,10 +54,19 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        brand: {
-          DEFAULT: "hsl(var(--brand))",
-          foreground: "hsl(var(--brand-foreground))",
-          muted: "hsl(var(--brand-muted))",
+        // Chaise-specific colors
+        chaise: {
+          navbar: "#000000",
+          brand: "#59C4FF",
+          "nav-link": "#c1c1c1",
+          "nav-link-hover": "#ffffff",
+          primary: "#4674a7",
+          "primary-hover": "#428bca",
+          "table-header": "#d0e0f0",
+          highlight: "#f7f0cf",
+          danger: "#d9534f",
+          warning: "#f0ad4e",
+          link: "#0366d6",
         },
       },
       borderRadius: {
@@ -59,32 +76,16 @@ module.exports = {
       },
       keyframes: {
         "fade-in": {
-          from: { opacity: "0", transform: "translateY(6px)" },
+          from: { opacity: "0", transform: "translateY(4px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
-        "fade-in-up": {
-          from: { opacity: "0", transform: "translateY(12px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
-        },
-        "slide-in-right": {
-          from: { opacity: "0", transform: "translateX(16px)" },
+        "slide-row": {
+          from: { opacity: "0", transform: "translateX(-4px)" },
           to: { opacity: "1", transform: "translateX(0)" },
-        },
-        "pulse-subtle": {
-          "0%, 100%": { opacity: "0.5" },
-          "50%": { opacity: "0.9" },
-        },
-        "glow": {
-          "0%, 100%": { boxShadow: "0 0 4px hsl(var(--brand) / 0.2)" },
-          "50%": { boxShadow: "0 0 16px hsl(var(--brand) / 0.4)" },
         },
       },
       animation: {
-        "fade-in": "fade-in 0.35s ease-out",
-        "fade-in-up": "fade-in-up 0.5s ease-out",
-        "slide-in-right": "slide-in-right 0.3s ease-out",
-        "pulse-subtle": "pulse-subtle 2.5s ease-in-out infinite",
-        "glow": "glow 3s ease-in-out infinite",
+        "fade-in": "fade-in 0.3s ease-out",
       },
     },
   },

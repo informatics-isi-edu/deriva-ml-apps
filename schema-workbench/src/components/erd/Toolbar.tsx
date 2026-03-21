@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Search, Filter, ChevronDown, ChevronRight, LayoutGrid, ZoomIn, ZoomOut, Maximize2, Map } from "lucide-react";
+import { Search, Filter, ChevronDown, ChevronRight, LayoutGrid, ZoomIn, ZoomOut, Maximize2, Map, Download, Upload, CheckCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +35,9 @@ interface ToolbarProps {
   onJumpToTable: (table: EnrichedTable) => void;
   canvasControls: CanvasControls | null;
   onCatalogClick?: () => void;
+  onExport?: () => void;
+  onImport?: () => void;
+  onValidate?: () => void;
 }
 
 const TYPE_DOT_COLORS: Record<string, string> = {
@@ -64,6 +67,9 @@ export default function Toolbar({
   onJumpToTable,
   canvasControls,
   onCatalogClick,
+  onExport,
+  onImport,
+  onValidate,
 }: ToolbarProps) {
   const [open, setOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
@@ -314,6 +320,48 @@ export default function Toolbar({
           </>
         )}
       </span>
+
+      {/* Annotation tools */}
+      {(onExport || onImport || onValidate) && (
+        <>
+          <div className="h-5 w-px bg-white/20" />
+          <div className="flex items-center gap-0.5">
+            {onExport && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-chaise-navbar-text/70 hover:text-white hover:bg-white/10"
+                onClick={onExport}
+                title="Export annotations"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onImport && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-chaise-navbar-text/70 hover:text-white hover:bg-white/10"
+                onClick={onImport}
+                title="Import annotations"
+              >
+                <Upload className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onValidate && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-chaise-navbar-text/70 hover:text-white hover:bg-white/10"
+                onClick={onValidate}
+                title="Validate annotations"
+              >
+                <CheckCircle className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Canvas controls */}
       {canvasControls && (

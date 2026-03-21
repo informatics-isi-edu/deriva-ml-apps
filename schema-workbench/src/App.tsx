@@ -6,6 +6,8 @@ import DetailPanel from "@/components/erd/DetailPanel";
 import Toolbar from "@/components/erd/Toolbar";
 import SplitLayout from "@/components/erd/SplitLayout";
 import CatalogPicker from "@/components/erd/CatalogPicker";
+import ExportImportDialog from "@/components/erd/ExportImportDialog";
+import ValidationDialog from "@/components/erd/ValidationDialog";
 import type { CatalogSchema, EnrichedTable, SchemaFilter } from "@/types";
 import {
   fetchSchema,
@@ -14,6 +16,7 @@ import {
 } from "@/ermrest-client";
 import { hasCatalogConfig, getCatalogConfig } from "@/catalog-config";
 import { Toaster } from "@/components/ui/sonner";
+import { validateCatalogAnnotations, type ValidationReport } from "@/annotation-validator";
 
 export default function App() {
   const [schema, setSchema] = useState<CatalogSchema | null>(null);
@@ -33,6 +36,13 @@ export default function App() {
   const [hideAssociations, setHideAssociations] = useState(true);
   const [canvasControls, setCanvasControls] = useState<CanvasControls | null>(null);
   const [showCatalog, setShowCatalog] = useState(false);
+
+  // Export/Import/Validate dialog state
+  const [exportImportOpen, setExportImportOpen] = useState(false);
+  const [exportImportMode, setExportImportMode] = useState<"export" | "import">("export");
+  const [validationOpen, setValidationOpen] = useState(false);
+  const [validationReport, setValidationReport] = useState<ValidationReport | null>(null);
+  const [validating, setValidating] = useState(false);
 
   const { hostname, catalogId } = getCatalogInfo();
 
@@ -115,6 +125,41 @@ export default function App() {
     setActiveSchema(null);
     setSelectedTable(null);
   }, []);
+
+  const handleExport = useCallback(() => {
+    setExportImportMode("export");
+    setExportImportOpen(true);
+  }, []);
+
+  const handleImport = useCallback(() => {
+    setExportImportMode("import");
+    setExportImportOpen(true);
+  }, []);
+
+  const handleImportComplete = useCallback(async () => {
+    // Refresh schema from server after import
+    try {
+      const s = await fetchSchema();
+      setSchema(s);
+      const enriched = await buildEnrichedTables(s);
+      setTables(enriched);
+    } catch (e: any) {
+      setError(e.message || "Failed to refresh schema");
+    }
+  }, []);
+
+  const handleValidate = useCallback(async () => {
+    if (!schema) return;
+    setValidationReport(null);
+    setValidating(true);
+    setValidationOpen(true);
+    // Run validation async to not block UI
+    requestAnimationFrame(() => {
+      const report = validateCatalogAnnotations(schema);
+      setValidationReport(report);
+      setValidating(false);
+    });
+  }, [schema]);
 
   const handleJumpToTable = useCallback(
     (table: EnrichedTable) => {
@@ -240,6 +285,9 @@ export default function App() {
         onJumpToTable={handleJumpToTable}
         canvasControls={canvasControls}
         onCatalogClick={onCatalogClick}
+        onExport={schema ? handleExport : undefined}
+        onImport={schema ? handleImport : undefined}
+        onValidate={schema ? handleValidate : undefined}
       />
 
       <SplitLayout
@@ -282,6 +330,25 @@ export default function App() {
         }
       />
     </div>
+
+    {schema && (
+      <ExportImportDialog
+        open={exportImportOpen}
+        onOpenChange={setExportImportOpen}
+        mode={exportImportMode}
+        schema={schema}
+        activeSchema={activeSchema}
+        selectedTable={selectedTable}
+        onImportComplete={handleImportComplete}
+      />
+    )}
+
+    <ValidationDialog
+      open={validationOpen}
+      onOpenChange={setValidationOpen}
+      report={validationReport}
+      loading={validating}
+    />
     </>
   );
 }

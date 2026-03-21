@@ -45,16 +45,18 @@ export function AppGrid({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 p-6">
-      {apps.map((app) => (
-        <AppCard
-          key={app.id}
-          app={app}
-          selectedCatalog={selectedCatalog}
-          hostname={hostname}
-          onLaunch={onLaunch}
-        />
-      ))}
+    <div className="p-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {apps.map((app) => (
+          <AppCard
+            key={app.id}
+            app={app}
+            selectedCatalog={selectedCatalog}
+            hostname={hostname}
+            onLaunch={onLaunch}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -80,57 +82,63 @@ function AppCard({
       onClick={() => canLaunch && onLaunch(app)}
       disabled={!canLaunch}
       className={`
-        app-card group relative text-left rounded-lg border p-5 transition-all
+        app-card group relative text-left rounded border p-5 transition-all
         ${
           canLaunch
-            ? "bg-card hover:bg-card/80 border-border hover:border-brand/40 hover:shadow-lg hover:shadow-brand/5 cursor-pointer"
-            : "bg-card/50 border-border/50 cursor-not-allowed opacity-60"
+            ? "bg-white hover:border-[#428bca] hover:shadow-md cursor-pointer border-[#ccc]"
+            : "bg-[#f4f4f4] border-[#ddd] cursor-not-allowed opacity-60"
         }
       `}
     >
       {/* Top row: icon + category */}
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between mb-3">
         <div
           className={`
-            p-2.5 rounded-lg transition-colors
-            ${canLaunch ? "bg-brand/10 group-hover:bg-brand/15" : "bg-muted/50"}
+            p-2 rounded transition-colors
+            ${canLaunch ? "bg-[#d0e0f0]" : "bg-[#f1f1f1]"}
           `}
         >
           <IconComponent
-            className={`h-5 w-5 ${canLaunch ? "text-brand" : "text-muted-foreground"}`}
+            className={`h-5 w-5 ${canLaunch ? "text-[#4674a7]" : "text-[#999]"}`}
           />
         </div>
 
         <div className="flex items-center gap-1.5">
           {needsCatalog && !hasCatalog && (
-            <div className="flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
+            <div className="flex items-center gap-1 text-[10px] text-[#999] bg-[#f1f1f1] px-2 py-0.5 rounded-full">
               <Lock className="h-2.5 w-2.5" />
               Catalog required
             </div>
           )}
-          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider bg-muted/50 px-2 py-0.5 rounded-full">
+          <span className="text-[10px] font-medium text-[#777] uppercase tracking-wider bg-[#f1f1f1] px-2 py-0.5 rounded-full">
             {app.category}
           </span>
         </div>
       </div>
 
       {/* Name */}
-      <h3 className="text-base font-semibold text-foreground mb-1.5 group-hover:text-brand transition-colors">
+      <h3
+        className={`text-base font-semibold mb-1 transition-colors ${
+          canLaunch
+            ? "text-[#333] group-hover:text-[#4674a7]"
+            : "text-[#999]"
+        }`}
+      >
         {app.name}
       </h3>
 
       {/* Description */}
-      <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+      <p className="text-xs text-[#777] leading-relaxed mb-4">
         {app.description}
       </p>
 
       {/* Footer */}
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-mono text-muted-foreground/60">
+        <span className="text-[10px] font-mono text-[#bbb]">
           {app.id}
         </span>
         {canLaunch && (
-          <div className="flex items-center gap-1 text-xs text-brand opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 text-xs text-[#4674a7] opacity-0 group-hover:opacity-100 transition-opacity">
             Launch
             <ExternalLink className="h-3 w-3" />
           </div>

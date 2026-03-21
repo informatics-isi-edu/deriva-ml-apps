@@ -36,3 +36,7 @@ export interface ServerConnection {
   catalogs: CatalogEntry[];
   aliases: AliasEntry[];
 }
+
+export type LaunchResponse =
+  | { status: "success"; app_id: string; url: string; port: number; app_name: string }
+  | { status: "error"; error: string };
