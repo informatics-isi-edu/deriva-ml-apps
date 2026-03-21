@@ -161,10 +161,16 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
         except ValueError as e:
             self._send_json(400, {"status": "error", "error": str(e)})
 
-    # --- Dynamic app serving ---
+    # --- App serving (built-in + dynamic) ---
+
+    apps_root: Path = Path(".")  # Root of the apps repo (for resolving dist_path)
 
     def _serve_dynamic_app(self, path: str) -> None:
-        """Serve static files for dynamically registered apps at /apps/{id}/."""
+        """Serve static files for registered apps at /apps/{id}/.
+
+        Works for both built-in apps (resolved from dist_path relative to
+        apps_root) and dynamic apps (resolved from absolute path).
+        """
         if self.registry is None:
             self.send_error(500, "Registry not initialized")
             return
@@ -179,11 +185,20 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
         subpath = parts[3] if len(parts) > 3 else "index.html"
 
         app = self.registry.get_app(app_id)
-        if app is None or not app.get("dynamic"):
-            self.send_error(404, f"Dynamic app '{app_id}' not found")
+        if app is None:
+            self.send_error(404, f"App '{app_id}' not found")
             return
 
-        app_path = Path(app["path"])
+        # Resolve the app's static directory
+        if app.get("dynamic"):
+            app_path = Path(app["path"])
+        elif app.get("dist_path"):
+            # Built-in: dist_path is relative to apps_root
+            app_path = self.apps_root / app["dist_path"]
+        else:
+            self.send_error(404, f"App '{app_id}' has no servable path")
+            return
+
         file_path = app_path / subpath
         if not file_path.is_file():
             # SPA fallback
@@ -341,6 +356,7 @@ def create_server(
     static_dir: Path,
     apps_json: Path,
     dynamic_dir: Path,
+    apps_root: Path | None = None,
     port: int = 8080,
     bind: str = "127.0.0.1",
 ) -> http.server.HTTPServer:
@@ -351,6 +367,8 @@ def create_server(
         static_dir: Path to directory with the built SPA (must contain index.html).
         apps_json: Path to apps.json with built-in app metadata.
         dynamic_dir: Directory for dynamic app registrations.
+        apps_root: Root directory for resolving built-in app dist_path entries.
+            Defaults to the parent of apps_json.
         port: Port to bind to. 0 = auto-select a free port.
         bind: Address to bind to.
 
@@ -378,6 +396,7 @@ def create_server(
     AppHandler.static_dir = static_dir
     AppHandler.ssl_context = ssl_ctx
     AppHandler.registry = registry
+    AppHandler.apps_root = (apps_root or apps_json.parent).resolve()
 
     # Ensure common MIME types
     mimetypes.add_type("application/javascript", ".js")

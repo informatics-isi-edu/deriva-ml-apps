@@ -12,14 +12,20 @@ from deriva_apps.server import create_server
 @pytest.fixture
 def server_env(tmp_path):
     """Create minimal server environment."""
+    # Built-in app dist directory
+    builtin_dist = tmp_path / "test-app" / "dist"
+    builtin_dist.mkdir(parents=True)
+    (builtin_dist / "index.html").write_text("<html><body>Built-in App</body></html>")
+    (builtin_dist / "app.js").write_text("console.log('test-app')")
+
     # apps.json
     apps_json = tmp_path / "apps.json"
     apps_json.write_text(json.dumps({"apps": [
         {"id": "test-app", "name": "Test App", "description": "A test app",
-         "requires_catalog": False}
+         "requires_catalog": False, "dist_path": "test-app/dist"}
     ]}))
 
-    # Static dir with index.html
+    # Static dir with index.html (the SPA shell / homepage)
     static_dir = tmp_path / "dist"
     static_dir.mkdir()
     (static_dir / "index.html").write_text("<html><body>SPA Shell</body></html>")
@@ -207,3 +213,24 @@ class TestDynamicAppServing:
         url, _, _ = server
         status, _ = _get(f"{url}/apps/nonexistent/index.html")
         assert status == 404
+
+
+class TestBuiltinAppServing:
+    def test_serves_builtin_app_index(self, server):
+        url, _, _ = server
+        status, body = _get(f"{url}/apps/test-app/index.html")
+        assert status == 200
+        assert "Built-in App" in body
+
+    def test_serves_builtin_app_static_file(self, server):
+        url, _, _ = server
+        status, body = _get(f"{url}/apps/test-app/app.js")
+        assert status == 200
+        assert "test-app" in body
+
+    def test_builtin_app_spa_fallback(self, server):
+        url, _, _ = server
+        # Non-existent path should fall back to index.html
+        status, body = _get(f"{url}/apps/test-app/some/route")
+        assert status == 200
+        assert "Built-in App" in body
